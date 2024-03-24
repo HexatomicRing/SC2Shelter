@@ -75,7 +75,7 @@ namespace SC2Shelter
                 try
                 {
                     var fileStream = LockedFiles[filePath];
-                    fileStream.Unlock(0, fileStream.Length);
+                    fileStream.Unlock(0, 1);
                     fileStream.Dispose();
                     LockedFiles.Remove(filePath);
                     return true;
@@ -255,71 +255,7 @@ namespace SC2Shelter
 
         private async void UpdateList()
         {
-            await Task.Run(() =>
-                {
-                    while (true)
-                    {
-                        try
-                        {
-                            var response = WebRequest.Create("###############").GetResponse();
-                            var stream = response.GetResponseStream();
-                            var bytes = new byte[16];
-                            if (stream != null)
-                            {
-                                var latest = 0L;
-                                if (stream.Read(bytes) == 16)
-                                {
-                                    for (var i = 8; i < 16; i++)
-                                    {
-                                        latest <<= 8;
-                                        latest += bytes[i];
-                                    }
-                                }
-                                stream.Close();
-                                if (latest != Version)
-                                {
-                                    if (File.Exists(save)) File.Delete(save);
-                                    new WebClient().DownloadFile("("###############").", save);
-                                    ReadSaving();
-                                    Version = latest;
-                                    Print("已获取最新屏蔽列表！");
-                                }
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
-                        try
-                        {
-                            var response = WebRequest.Create("("###############").").GetResponse();
-                            var stream = response.GetResponseStream();
-                            var bytes = new byte[4];
-                            if (stream != null)
-                            {
-                                var users = 0;
-                                if (stream.Read(bytes) == 4)
-                                {
-                                    for (var i = 0; i < 4; i++)
-                                    {
-                                        users <<= 8;
-                                        users += bytes[i];
-                                    }
-                                }
-                                Dispatcher.Invoke(() =>
-                                {
-                                    UsersLabel.Content = $"{users}人正在同时使用";
-                                });
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            // ignored
-                        }
-                        Task.Delay(10000).Wait();
-                    }
-                }
-            );
+			//This function is hidden in the open-source version.
         }
 
         private void ReadSaving()
