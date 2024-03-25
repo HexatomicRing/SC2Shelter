@@ -13,6 +13,9 @@ using Button = System.Windows.Forms.Button;
 using CheckBox = System.Windows.Controls.CheckBox;
 using Orientation = System.Windows.Forms.Orientation;
 using Path = System.IO.Path;
+using System.Text.RegularExpressions;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace SC2Shelter
 {
@@ -52,8 +55,17 @@ namespace SC2Shelter
         private readonly List<(string, string)> _blockList = new List<(string, string)>();
 
         private NotifyIcon _notifyIcon;
+		private readonly FileSystemWatcher fileSystemWatcher;
+		/// <summary>
+		/// 文件名匹配正则表达式
+		/// </summary>
+		private readonly Regex FILE_FULL_PATH_REGEX = new Regex(".s2ml$");
+		/// <summary>
+		/// 文件内容匹配正则表达式
+		/// </summary>
+		private readonly Regex FILE_CONTENT_REGEX = new Regex(".*path=.*");
+		private static readonly Dictionary<string, FileStream> LockedFiles = new Dictionary<string, FileStream>();
 
-        private static readonly Dictionary<string, FileStream> LockedFiles = new Dictionary<string, FileStream>();
         private static bool LockFile(string filePath)
         {
             lock (LockerFile)
@@ -75,6 +87,7 @@ namespace SC2Shelter
                 }
             }
         }
+
         private static bool UnlockFile(string filePath)
         {
             lock (LockerFile)
@@ -94,6 +107,7 @@ namespace SC2Shelter
                 }
             }
         }
+
         public MainWindow()
         {
             InitializeComponent();
@@ -104,8 +118,39 @@ namespace SC2Shelter
             ReadSaving();
             RunAsyncTask();
             UpdateList();
-        }
-        private void MinimizeToTray_Click(object sender, EventArgs e)
+			fileSystemWatcher = new FileSystemWatcher
+			{
+				Path = CacheDir,
+				NotifyFilter = NotifyFilters.FileName,
+				IncludeSubdirectories = true
+			};
+			fileSystemWatcher.Created += FileSystemWatcher_Created;
+			fileSystemWatcher.EnableRaisingEvents = true;
+		}
+
+		private async void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
+		{
+			Debug.WriteLine($"文件 {e.FullPath} 已经新增");
+			if (FILE_FULL_PATH_REGEX.IsMatch(e.FullPath))
+			{
+				var sr = new StreamReader(e.FullPath);
+				try
+                {
+                    var res = await sr.ReadToEndAsync();
+                    if (FILE_CONTENT_REGEX.IsMatch(res))
+                    {
+                        Debug.WriteLine($"文件 {e.FullPath} 已锁定");
+                        LockFileByMyself(e.FullPath);
+                    }
+                }
+                finally
+                {
+                    sr.Dispose();
+				}
+			}
+		}
+
+		private void MinimizeToTray_Click(object sender, EventArgs e)
         {
             Hide();
             _notifyIcon.Visible = true;
@@ -355,5 +400,50 @@ namespace SC2Shelter
                 // ignored
             }
         }
-    }
+
+		// 导入Windows API函数
+		[DllImport("kernel32.dll", SetLastError = true)]
+		static extern bool LockFile(IntPtr hFile, uint dwFileOffsetLow, uint dwFileOffsetHigh, uint nNumberOfBytesToLockLow, uint nNumberOfBytesToLockHigh);
+
+		[DllImport("kernel32.dll", SetLastError = true)]
+		static extern bool UnlockFile(IntPtr hFile, uint dwFileOffsetLow, uint dwFileOffsetHigh, uint nNumberOfBytesToUnlockLow, uint nNumberOfBytesToUnlockHigh);
+
+		// 导入其他Windows API函数
+		[DllImport("kernel32.dll", SetLastError = true)]
+		static extern IntPtr CreateFile(string lpFileName, FileAccess dwDesiredAccess, FileShare dwShareMode, IntPtr lpSecurityAttributes, FileMode dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
+
+		[DllImport("kernel32.dll", SetLastError = true)]
+		static extern bool CloseHandle(IntPtr hObject);
+
+		public void LockFileByMyself(string filePath)
+		{
+			// 打开文件句柄
+			IntPtr fileHandle = IntPtr.Zero;
+			try
+			{
+				fileHandle = CreateFile(filePath, FileAccess.ReadWrite, FileShare.None, IntPtr.Zero, FileMode.Open, 0, IntPtr.Zero);
+				if (fileHandle != IntPtr.Zero)
+				{
+					UnlockFile(fileHandle, 0, 0, 0xFFFFFFFF, 0xFFFFFFFF);
+					// 锁定文件
+					if (LockFile(fileHandle, 0, 0, 0xFFFFFFFF, 0xFFFFFFFF))
+					{
+						Console.WriteLine("File locked. Press any key to unlock the file.");
+					}
+					else
+					{
+						Console.WriteLine("Failed to lock the file.");
+					}
+				}
+				else
+				{
+					Console.WriteLine("Failed to open the file.");
+				}
+			}
+			finally
+			{
+				CloseHandle(fileHandle);
+			}
+		}
+	}
 }
