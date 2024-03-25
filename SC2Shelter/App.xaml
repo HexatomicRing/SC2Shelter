@@ -4,6 +4,6 @@
              xmlns:local="clr-namespace:SC2Shelter"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        
     </Application.Resources>
 </Application>

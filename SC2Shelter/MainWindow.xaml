@@ -6,6 +6,7 @@
         xmlns:local="clr-namespace:SC2Shelter"
         mc:Ignorable="d"
         Title="星际争霸2防炸图器 by 遗世紫丁香" Height="450" Width="400">
+    
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -19,13 +20,15 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel x:Name="LangPanel" Grid.Column="0" Orientation="Vertical"/>
                 <StackPanel Grid.Column="1" Orientation="Vertical">
-                    <Label x:Name="StateLabel" Content="存在风险!\n未获取到最新的屏蔽列表,\n请检查网络设置!" Grid.Row="0" VerticalContentAlignment="Center">
+                    <Label x:Name="StateLabel" Content="存在风险!&#10;未获取到最新的屏蔽列表,&#10;请检查网络设置!" VerticalContentAlignment="Center">
                         <Label.Background>
                             <SolidColorBrush Color="LightPink"/>
                         </Label.Background>
                     </Label>
-                    <Label x:Name="UsersLabel" Content="-1人正在同时使用" Grid.Row="1" VerticalContentAlignment="Center">
+                    <Label x:Name="UsersLabel" Content="-1人正在同时使用" VerticalContentAlignment="Center">
                     </Label>
+                    <Button x:Name="MinimizeToTray" Content="最小化到托盘" VerticalContentAlignment="Center">
+                    </Button>
                 </StackPanel>
             </Grid>
         </StackPanel>

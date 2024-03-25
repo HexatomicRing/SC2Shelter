@@ -1,11 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 using System.IO;
+using System.Net;
+using System.Windows.Controls;
 using System.Windows.Forms;
+using System.Windows.Shell;
+using Button = System.Windows.Forms.Button;
+using CheckBox = System.Windows.Controls.CheckBox;
+using Orientation = System.Windows.Forms.Orientation;
 using Path = System.IO.Path;
 
 namespace SC2Shelter
@@ -13,9 +19,9 @@ namespace SC2Shelter
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class MainWindow : Window
+    public partial class MainWindow
     {
-        private static readonly (string, string, bool)[] langs =
+        private static readonly (string, string, bool)[] Langs =
         {
             ("zhCN", "简体中文", true),
             ("zhTW", "繁体中文", true),
@@ -30,27 +36,27 @@ namespace SC2Shelter
             ("ruRU", "俄语", true),
             ("koKR", "朝鲜语(南朝鲜)", true)
         };
-        private const string save = "latest.list";
-        private static readonly object lockerFile = new object();
-        private static readonly object lockerConsole = new object();
-        private List<System.Windows.Controls.CheckBox> langBoxes = new List<System.Windows.Controls.CheckBox>();
-        private const string cacheDir = "C:/ProgramData/Blizzard Entertainment/Battle.net/Cache/";
-        private long version = 0L;
-        private bool NeedRefresh = false;
-        private readonly SolidColorBrush brushRed = new SolidColorBrush(Color.FromArgb(255, 255, 182, 193));
-        private readonly SolidColorBrush brushYellow = new SolidColorBrush(Color.FromArgb(255, 255, 255, 180));
-        private readonly SolidColorBrush brushGreen = new SolidColorBrush(Color.FromArgb(255, 180, 255, 180));
-        private const string stateSafe = "安全，已锁住带有\n链接的地图信息";
+        private const string Save = "latest.list";
+        private static readonly object LockerFile = new object();
+        private static readonly object LockerConsole = new object();
+        private readonly List<CheckBox> _langBoxes = new List<CheckBox>();
+        private const string CacheDir = "C:/ProgramData/Blizzard Entertainment/Battle.net/Cache/";
+        private long _version;
+        private bool _needRefresh;
+        private readonly SolidColorBrush _brushRed = new SolidColorBrush(Color.FromArgb(255, 255, 182, 193));
+        private readonly SolidColorBrush _brushYellow = new SolidColorBrush(Color.FromArgb(255, 255, 255, 180));
+        private readonly SolidColorBrush _brushGreen = new SolidColorBrush(Color.FromArgb(255, 180, 255, 180));
+        private const string StateSafe = "安全，已锁住带有\n链接的地图信息";
         private const string StateWarn = "仅勾选的语言安全";
-        private const string stateUnsafe = "不安全，游戏可能卡死!\n请检先关闭游戏,等到显示安全再启动。";
-        private readonly List<(string, string)> blockList = new List<(string, string)>();
+        private const string StateUnsafe = "不安全，游戏可能卡死!\n请检先关闭游戏,等到显示安全再启动。";
+        private readonly List<(string, string)> _blockList = new List<(string, string)>();
 
-        private NotifyIcon notifyIcon;
+        private NotifyIcon _notifyIcon;
 
         private static readonly Dictionary<string, FileStream> LockedFiles = new Dictionary<string, FileStream>();
         private static bool LockFile(string filePath)
         {
-            lock (lockerFile)
+            lock (LockerFile)
             {
                 if (LockedFiles.ContainsKey(filePath)) return true;
                 try
@@ -69,9 +75,9 @@ namespace SC2Shelter
                 }
             }
         }
-        private bool UnlockFile(string filePath)
+        private static bool UnlockFile(string filePath)
         {
-            lock (lockerFile)
+            lock (LockerFile)
             {
                 if (!LockedFiles.ContainsKey(filePath)) return true;
                 try
@@ -82,7 +88,7 @@ namespace SC2Shelter
                     LockedFiles.Remove(filePath);
                     return true;
                 }
-                catch (IOException e)
+                catch (IOException)
                 {
                     return false;
                 }
@@ -92,25 +98,23 @@ namespace SC2Shelter
         {
             InitializeComponent();
             InitNotifyIcon();
-            this.StateChanged += MainWindow_StateChanged; ;
+            Closing += MainWindow_Close;
+            MinimizeToTray.Click += MinimizeToTray_Click;
             AddCheckboxes();
             ReadSaving();
             RunAsyncTask();
             UpdateList();
         }
-
-        private void MainWindow_StateChanged(object sender, EventArgs e)
+        private void MinimizeToTray_Click(object sender, EventArgs e)
         {
-            if (this.WindowState == WindowState.Minimized)
-            {
-                this.Hide();
-                this.ShowInTaskbar = false;
-            }
+            Hide();
+            _notifyIcon.Visible = true;
+            ShowInTaskbar = false;
         }
 
-        public void InitNotifyIcon()
+        private void InitNotifyIcon()
         {
-            notifyIcon = new NotifyIcon
+            _notifyIcon = new NotifyIcon
             {
                 Text = "星际争霸2防炸图器运行中",
                 Visible = true,
@@ -119,11 +123,24 @@ namespace SC2Shelter
             var cms = new ContextMenuStrip();
             cms.Items.Add("关闭");
             cms.Items[0].Click += MainWindow_Click;
-            notifyIcon.ContextMenuStrip = cms;
-            notifyIcon.MouseClick += NotifyIcon_MouseClick;
+            _notifyIcon.ContextMenuStrip = cms;
+            _notifyIcon.MouseClick += NotifyIcon_MouseClick;
         }
 
-        private void MainWindow_Click(object sender, EventArgs e)
+
+        private void MainWindow_Close(object sender, CancelEventArgs e)
+        {
+            if (System.Windows.MessageBox.Show("是否退出程序？", "提示", MessageBoxButton.YesNo) == MessageBoxResult.No)
+            {
+                e.Cancel = true;
+            }
+            else
+            {
+                _notifyIcon.Visible = false;
+                _notifyIcon.Dispose();
+            }
+        }
+        private static void MainWindow_Click(object sender, EventArgs e)
         {
             if (System.Windows.MessageBox.Show("是否退出程序？", "提示", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
             {
@@ -133,21 +150,30 @@ namespace SC2Shelter
 
         private void NotifyIcon_MouseClick(object sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Left)
+            if (e.Button != MouseButtons.Left) return;
+            if (Visibility == Visibility.Visible)
+                return;
+            ShowInTaskbar = false;
+            Visibility = Visibility.Visible;
+            Show();
+            WindowState = WindowState.Normal;
+            Activate();
+        }
+        protected override void OnClosed(EventArgs e)
+        {
+            if (_notifyIcon != null)
             {
-                if (this.Visibility == Visibility.Visible)
-                    return;
-                this.ShowInTaskbar = true;
-                this.Visibility = Visibility.Visible;
-                this.Activate();
+                _notifyIcon.Visible = false;
+                _notifyIcon.Dispose();
             }
+            base.OnClosed(e);
         }
 
         private void AddCheckboxes()
         {
-            foreach (var (id, text, state) in langs)
+            foreach (var (_, text, state) in Langs)
             {
-                var checkBox = new System.Windows.Controls.CheckBox
+                var checkBox = new CheckBox
                 {
                     Content = text,
                     IsChecked = state
@@ -155,7 +181,7 @@ namespace SC2Shelter
                 checkBox.Checked += Checked;
                 checkBox.Unchecked += Unchecked;
                 LangPanel.Children.Add(checkBox);
-                langBoxes.Add(checkBox);
+                _langBoxes.Add(checkBox);
             }
         }
 
@@ -163,7 +189,7 @@ namespace SC2Shelter
         {
             Dispatcher.Invoke(() =>
             {
-                lock (lockerConsole)
+                lock (LockerConsole)
                 {
                     ConsoleBox.AppendText(text + "\n");
                     if (Math.Abs(ConsoleBoxViewer.ScrollableHeight - ConsoleBoxViewer.VerticalOffset) < 0.01)
@@ -174,29 +200,29 @@ namespace SC2Shelter
 
         private void Checked(object sender, RoutedEventArgs e)
         {
-            var index = langBoxes.IndexOf((System.Windows.Controls.CheckBox)sender);
+            var index = _langBoxes.IndexOf((CheckBox)sender);
             if (index >= 0)
             {
-                var (id, text, _) = langs[index];
-                langs[index] = (id, text, true);
+                var (id, text, _) = Langs[index];
+                Langs[index] = (id, text, true);
             }
-            NeedRefresh = true;
+            _needRefresh = true;
         }
 
         private void Unchecked(object sender, RoutedEventArgs e)
         {
-            var index = langBoxes.IndexOf((System.Windows.Controls.CheckBox)sender);
+            var index = _langBoxes.IndexOf((CheckBox)sender);
             if (index >= 0)
             {
-                var (id, text, _) = langs[index];
-                langs[index] = (id, text, false);
+                var (id, text, _) = Langs[index];
+                Langs[index] = (id, text, false);
             }
-            NeedRefresh = true;
+            _needRefresh = true;
         }
 
         private bool LangLock(string lang)
         {
-            foreach (var (id, _, state) in langs)
+            foreach (var (id, _, state) in Langs)
             {
                 if (id == lang) return state;
             }
@@ -208,22 +234,22 @@ namespace SC2Shelter
                 {
                     while (true)
                     {
-                        if (NeedRefresh)
+                        if (_needRefresh)
                         {
                             var safe = true;
                             var lockCount = 0;
                             var unlockCount = 0;
                             var failLock = 0;
                             var failUnlock = 0;
-                            foreach (var (name, lang) in blockList)
+                            foreach (var (name, lang) in _blockList)
                             {
-                                var path = cacheDir + name;
+                                var path = CacheDir + name;
                                 var toLock = LangLock(lang);
                                 if (!LockedFiles.ContainsKey(path))
                                 {
                                     if (toLock)
                                     {
-                                        var result = LockFile(cacheDir + name);
+                                        var result = LockFile(CacheDir + name);
                                         if (result)
                                         {
                                             lockCount++;
@@ -239,7 +265,7 @@ namespace SC2Shelter
                                 {
                                     if (!toLock)
                                     {
-                                        var result = UnlockFile(cacheDir + name);
+                                        var result = UnlockFile(CacheDir + name);
                                         if (result)
                                         {
                                             unlockCount++;
@@ -262,13 +288,13 @@ namespace SC2Shelter
                             else
                                 info += "。";
                             Print(info);
-                            NeedRefresh = false;
+                            _needRefresh = false;
                             Dispatcher.Invoke(() =>
                             {
                                 if (safe)
                                 {
                                     var lockAll = true;
-                                    foreach (var (_, _, state) in langs)
+                                    foreach (var (_, _, state) in Langs)
                                     {
                                         if (!state)
                                         {
@@ -279,19 +305,19 @@ namespace SC2Shelter
 
                                     if (lockAll)
                                     {
-                                        StateLabel.Background = brushGreen;
-                                        StateLabel.Content = stateSafe;
+                                        StateLabel.Background = _brushGreen;
+                                        StateLabel.Content = StateSafe;
                                     }
                                     else
                                     {
-                                        StateLabel.Background = brushYellow;
+                                        StateLabel.Background = _brushYellow;
                                         StateLabel.Content = StateWarn;
                                     }
                                 }
                                 else
                                 {
-                                    StateLabel.Background = brushRed;
-                                    StateLabel.Content = stateUnsafe;
+                                    StateLabel.Background = _brushRed;
+                                    StateLabel.Content = StateUnsafe;
                                 }
                             });
 
@@ -304,7 +330,7 @@ namespace SC2Shelter
 
         private async void UpdateList()
         {
-            //This function is hidden in the open-source version.
+			//This function is hidden in the open-source version.
         }
 
         private void ReadSaving()
@@ -312,17 +338,17 @@ namespace SC2Shelter
             try
             {
                 var buffer = new List<(string, string)>();
-                foreach (var line in File.ReadAllLines(save))
+                foreach (var line in File.ReadAllLines(Save))
                 {
                     var pars = line.Split(';');
                     buffer.Add((pars[0], pars[1]));
                 }
-                blockList.Clear();
+                _blockList.Clear();
                 foreach (var pair in buffer)
                 {
-                    blockList.Add(pair);
+                    _blockList.Add(pair);
                 }
-                NeedRefresh = true;
+                _needRefresh = true;
             }
             catch
             {
