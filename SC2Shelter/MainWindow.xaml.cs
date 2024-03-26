@@ -243,7 +243,7 @@ namespace SC2Shelter
                 {
                     try
                     {
-                        var response = WebRequest.Create("http://121.89.206.100:3484/arcade_version").GetResponse();
+                        var response = WebRequest.Create("########").GetResponse();
                         var stream = response.GetResponseStream();
                         var bytes = new byte[16];
                         if (stream != null)
@@ -260,7 +260,7 @@ namespace SC2Shelter
                             stream.Close();
                             if (latest != 0L && latest != _version)
                             {
-                                response = WebRequest.Create("http://121.89.206.100:3484/arcade_list2").GetResponse();
+                                response = WebRequest.Create("########").GetResponse();
                                 stream = response.GetResponseStream();
                                 var buffer = new byte[32];
                                 var bufferList = new SortedSet<string>();
@@ -295,7 +295,7 @@ namespace SC2Shelter
                     }
                     try
                     {
-                        var response = WebRequest.Create("http://121.89.206.100:3484/users").GetResponse();
+                        var response = WebRequest.Create("########").GetResponse();
                         var stream = response.GetResponseStream();
                         var bytes = new byte[4];
                         if (stream != null)
@@ -378,7 +378,7 @@ namespace SC2Shelter
                 try
                 {
                     var name = fullPath.Substring(fullPath.Length - 69, 64);
-                    var request = (HttpWebRequest)WebRequest.Create($"http://121.89.206.100:3484/post/?{name}");
+                    var request = (HttpWebRequest)WebRequest.Create($"########?{name}");
                     request.Method = WebRequestMethods.Http.Get;
                     request.GetResponse();
                 }
