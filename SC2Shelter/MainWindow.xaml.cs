@@ -5,13 +5,8 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.IO;
-using System.Net;
-using System.Windows.Controls;
 using System.Windows.Forms;
-using System.Windows.Shell;
-using Button = System.Windows.Forms.Button;
 using CheckBox = System.Windows.Controls.CheckBox;
-using Orientation = System.Windows.Forms.Orientation;
 using Path = System.IO.Path;
 using System.Text.RegularExpressions;
 using System.Diagnostics;
@@ -55,16 +50,16 @@ namespace SC2Shelter
         private readonly List<(string, string)> _blockList = new List<(string, string)>();
 
         private NotifyIcon _notifyIcon;
-		private readonly FileSystemWatcher fileSystemWatcher;
-		/// <summary>
-		/// 文件名匹配正则表达式
-		/// </summary>
-		private readonly Regex FILE_FULL_PATH_REGEX = new Regex(".s2ml$");
-		/// <summary>
-		/// 文件内容匹配正则表达式
-		/// </summary>
-		private readonly Regex FILE_CONTENT_REGEX = new Regex(".*path=.*");
-		private static readonly Dictionary<string, FileStream> LockedFiles = new Dictionary<string, FileStream>();
+        private readonly FileSystemWatcher fileSystemWatcher;
+        /// <summary>
+        /// 文件名匹配正则表达式
+        /// </summary>
+        private readonly Regex FILE_FULL_PATH_REGEX = new Regex(".s2ml$");
+        /// <summary>
+        /// 文件内容匹配正则表达式
+        /// </summary>
+        private readonly Regex FILE_CONTENT_REGEX = new Regex(".*path=.*");
+        private static readonly Dictionary<string, FileStream> LockedFiles = new Dictionary<string, FileStream>();
 
         private static bool LockFile(string filePath)
         {
@@ -93,17 +88,21 @@ namespace SC2Shelter
             lock (LockerFile)
             {
                 if (!LockedFiles.ContainsKey(filePath)) return true;
+                FileStream fileStream = null;
                 try
                 {
-                    var fileStream = LockedFiles[filePath];
+                    fileStream = LockedFiles[filePath];
                     fileStream.Unlock(0, 1);
-                    fileStream.Dispose();
                     LockedFiles.Remove(filePath);
                     return true;
                 }
                 catch (IOException)
                 {
                     return false;
+                }
+                finally
+                {
+                    fileStream?.Dispose();
                 }
             }
         }
@@ -118,39 +117,53 @@ namespace SC2Shelter
             ReadSaving();
             RunAsyncTask();
             UpdateList();
-			fileSystemWatcher = new FileSystemWatcher
-			{
-				Path = CacheDir,
-				NotifyFilter = NotifyFilters.FileName,
-				IncludeSubdirectories = true
-			};
-			fileSystemWatcher.Created += FileSystemWatcher_Created;
-			fileSystemWatcher.EnableRaisingEvents = true;
-		}
+            fileSystemWatcher = new FileSystemWatcher
+            {
+                Path = CacheDir,
+                NotifyFilter = NotifyFilters.FileName,
+                IncludeSubdirectories = true
+            };
+            fileSystemWatcher.Created += FileSystemWatcher_Created;
+            fileSystemWatcher.EnableRaisingEvents = true;
+        }
 
-		private async void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
-		{
-			Debug.WriteLine($"文件 {e.FullPath} 已经新增");
-			if (FILE_FULL_PATH_REGEX.IsMatch(e.FullPath))
-			{
-				var sr = new StreamReader(e.FullPath);
-				try
+        private async void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
+        {
+            Debug.WriteLine($"文件 {e.FullPath} 已经新增");
+            if (FILE_FULL_PATH_REGEX.IsMatch(e.FullPath))
+            {
+                var sr = new StreamReader(e.FullPath);
+                // 打开文件句柄
+                IntPtr fileHandle = IntPtr.Zero;
+                try
                 {
                     var res = await sr.ReadToEndAsync();
                     if (FILE_CONTENT_REGEX.IsMatch(res))
                     {
-                        Debug.WriteLine($"文件 {e.FullPath} 已锁定");
-                        LockFileByMyself(e.FullPath);
+                        Debug.WriteLine($"文件 {e.FullPath} 已匹配");
+                        fileHandle = CreateFile(e.FullPath, FileAccess.ReadWrite, FileShare.None, IntPtr.Zero, FileMode.Open, 0, IntPtr.Zero);
+                        if (fileHandle != IntPtr.Zero)
+                        {
+                            UnlockFile(fileHandle, 0, 0, 0xFFFFFFFF, 0xFFFFFFFF);
+                            Debug.WriteLine($"文件 {e.FullPath} 已解锁");
+                            File.Delete(e.FullPath);
+                            Debug.WriteLine($"文件 {e.FullPath} 已删除");
+                        }
+                        else
+                        {
+                            Debug.WriteLine($"打开文件 {e.FullPath} 失败");
+                        }
                     }
                 }
                 finally
                 {
                     sr.Dispose();
-				}
-			}
-		}
+                    CloseHandle(fileHandle);
+                }
+            }
+        }
 
-		private void MinimizeToTray_Click(object sender, EventArgs e)
+        private void MinimizeToTray_Click(object sender, EventArgs e)
         {
             Hide();
             _notifyIcon.Visible = true;
@@ -274,6 +287,7 @@ namespace SC2Shelter
             }
             return false;
         }
+
         private async void RunAsyncTask()
         {
             await Task.Run(() =>
@@ -376,7 +390,7 @@ namespace SC2Shelter
 
         private async void UpdateList()
         {
-			//This function is hidden in the open-source version.
+            //This function is hidden in the open-source version.
         }
 
         private void ReadSaving()
@@ -402,49 +416,53 @@ namespace SC2Shelter
             }
         }
 
-		// 导入Windows API函数
-		[DllImport("kernel32.dll", SetLastError = true)]
-		static extern bool LockFile(IntPtr hFile, uint dwFileOffsetLow, uint dwFileOffsetHigh, uint nNumberOfBytesToLockLow, uint nNumberOfBytesToLockHigh);
+        // 导入Windows API函数
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool LockFile(IntPtr hFile, uint dwFileOffsetLow, uint dwFileOffsetHigh, uint nNumberOfBytesToLockLow, uint nNumberOfBytesToLockHigh);
 
-		[DllImport("kernel32.dll", SetLastError = true)]
-		static extern bool UnlockFile(IntPtr hFile, uint dwFileOffsetLow, uint dwFileOffsetHigh, uint nNumberOfBytesToUnlockLow, uint nNumberOfBytesToUnlockHigh);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool UnlockFile(IntPtr hFile, uint dwFileOffsetLow, uint dwFileOffsetHigh, uint nNumberOfBytesToUnlockLow, uint nNumberOfBytesToUnlockHigh);
 
-		// 导入其他Windows API函数
-		[DllImport("kernel32.dll", SetLastError = true)]
-		static extern IntPtr CreateFile(string lpFileName, FileAccess dwDesiredAccess, FileShare dwShareMode, IntPtr lpSecurityAttributes, FileMode dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
+        // 导入其他Windows API函数
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern IntPtr CreateFile(string lpFileName, FileAccess dwDesiredAccess, FileShare dwShareMode, IntPtr lpSecurityAttributes, FileMode dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
 
-		[DllImport("kernel32.dll", SetLastError = true)]
-		static extern bool CloseHandle(IntPtr hObject);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool CloseHandle(IntPtr hObject);
 
-		public void LockFileByMyself(string filePath)
-		{
-			// 打开文件句柄
-			IntPtr fileHandle = IntPtr.Zero;
-			try
-			{
-				fileHandle = CreateFile(filePath, FileAccess.ReadWrite, FileShare.None, IntPtr.Zero, FileMode.Open, 0, IntPtr.Zero);
-				if (fileHandle != IntPtr.Zero)
-				{
-					UnlockFile(fileHandle, 0, 0, 0xFFFFFFFF, 0xFFFFFFFF);
-					// 锁定文件
-					if (LockFile(fileHandle, 0, 0, 0xFFFFFFFF, 0xFFFFFFFF))
-					{
-						Debug.WriteLine($"File {filePath} locked. Press any key to unlock the file.");
-					}
-					else
-					{
+        /// <summary>
+        /// 解锁后上锁文件
+        /// </summary>
+        /// <param name="filePath"></param>
+        public void LockFileByMyself(string filePath)
+        {
+            // 打开文件句柄
+            IntPtr fileHandle = IntPtr.Zero;
+            try
+            {
+                fileHandle = CreateFile(filePath, FileAccess.ReadWrite, FileShare.None, IntPtr.Zero, FileMode.Open, 0, IntPtr.Zero);
+                if (fileHandle != IntPtr.Zero)
+                {
+                    UnlockFile(fileHandle, 0, 0, 0xFFFFFFFF, 0xFFFFFFFF);
+                    // 锁定文件
+                    if (LockFile(fileHandle, 0, 0, 0xFFFFFFFF, 0xFFFFFFFF))
+                    {
+                        Debug.WriteLine($"File {filePath} locked. Press any key to unlock the file.");
+                    }
+                    else
+                    {
                         Debug.WriteLine($"Failed {filePath} to lock the file.");
-					}
-				}
-				else
-				{
+                    }
+                }
+                else
+                {
                     Debug.WriteLine($"Failed {filePath} to open the file.");
-				}
-			}
-			finally
-			{
-				CloseHandle(fileHandle);
-			}
-		}
-	}
+                }
+            }
+            finally
+            {
+                CloseHandle(fileHandle);
+            }
+        }
+    }
 }
