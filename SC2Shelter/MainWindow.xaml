@@ -34,7 +34,7 @@
             </Grid>
         </StackPanel>
         <ScrollViewer x:Name="ConsoleBoxViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <TextBox x:Name="ConsoleBox" IsReadOnly="True" VerticalScrollBarVisibility="Auto"/>
+            <RichTextBox x:Name="ConsoleBox" IsReadOnly="True" VerticalScrollBarVisibility="Auto"/>
         </ScrollViewer>
     </Grid>
 </Window>
