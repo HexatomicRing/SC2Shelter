@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SC2Shelter"
         mc:Ignorable="d"
+        WindowStartupLocation="CenterScreen"
         Title="星际争霸2防炸图器 by 遗世紫丁香" Height="450" Width="400">
     
     <Grid>

@@ -5,17 +5,13 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.IO;
-using System.Net;
-using System.Windows.Controls;
 using System.Windows.Forms;
-using System.Windows.Shell;
-using Button = System.Windows.Forms.Button;
 using CheckBox = System.Windows.Controls.CheckBox;
-using Orientation = System.Windows.Forms.Orientation;
 using Path = System.IO.Path;
 using System.Text.RegularExpressions;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using NLog;
 
 namespace SC2Shelter
 {
@@ -24,6 +20,10 @@ namespace SC2Shelter
     /// </summary>
     public partial class MainWindow
     {
+        /// <summary>
+        /// 日志
+        /// </summary>
+        private static Logger logger = LogManager.GetCurrentClassLogger();
         private static readonly (string, string, bool)[] Langs =
         {
             ("zhCN", "简体中文", true),
@@ -43,7 +43,7 @@ namespace SC2Shelter
         private static readonly object LockerFile = new object();
         private static readonly object LockerConsole = new object();
         private readonly List<CheckBox> _langBoxes = new List<CheckBox>();
-        private const string CacheDir = "C:/ProgramData/Blizzard Entertainment/Battle.net/Cache/";
+        private const string CacheDir = @"C:\ProgramData\Blizzard Entertainment\Battle.net\Cache\";
         private long _version;
         private bool _needRefresh;
         private readonly SolidColorBrush _brushRed = new SolidColorBrush(Color.FromArgb(255, 255, 182, 193));
@@ -55,34 +55,37 @@ namespace SC2Shelter
         private readonly List<(string, string)> _blockList = new List<(string, string)>();
 
         private NotifyIcon _notifyIcon;
-		private readonly FileSystemWatcher fileSystemWatcher;
-		/// <summary>
-		/// 文件名匹配正则表达式
-		/// </summary>
-		private readonly Regex FILE_FULL_PATH_REGEX = new Regex(".s2ml$");
-		/// <summary>
-		/// 文件内容匹配正则表达式
-		/// </summary>
-		private readonly Regex FILE_CONTENT_REGEX = new Regex(".*path=.*");
-		private static readonly Dictionary<string, FileStream> LockedFiles = new Dictionary<string, FileStream>();
+        private readonly FileSystemWatcher fileSystemWatcher;
+        /// <summary>
+        /// 文件名匹配正则表达式
+        /// </summary>
+        private readonly Regex FILE_FULL_PATH_REGEX = new Regex(".s2ml$");
+        /// <summary>
+        /// 文件内容匹配正则表达式
+        /// </summary>
+        private readonly Regex FILE_CONTENT_REGEX = new Regex(".*path=.*");
+        private static readonly Dictionary<string, FileStream> LockedFiles = new Dictionary<string, FileStream>();
 
         private static bool LockFile(string filePath)
         {
             lock (LockerFile)
             {
                 if (LockedFiles.ContainsKey(filePath)) return true;
+                FileStream fileStream = null;
                 try
                 {
                     var directoryPath = Path.GetDirectoryName(filePath);
                     if (!Directory.Exists(directoryPath) && directoryPath != null) Directory.CreateDirectory(directoryPath);
                     if (!File.Exists(filePath)) File.Create(filePath).Close();
-                    var fileStream = File.Open(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+                    fileStream = File.Open(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
                     fileStream.Lock(0, 1);
                     LockedFiles[filePath] = fileStream;
                     return true;
                 }
-                catch (IOException)
+                catch (Exception ex)
                 {
+                    fileStream?.Dispose();
+                    logger.Error(ex, $"锁定文件 {filePath} 出现未知错误");
                     return false;
                 }
             }
@@ -93,17 +96,22 @@ namespace SC2Shelter
             lock (LockerFile)
             {
                 if (!LockedFiles.ContainsKey(filePath)) return true;
+                FileStream fileStream = null;
                 try
                 {
-                    var fileStream = LockedFiles[filePath];
+                    fileStream = LockedFiles[filePath];
                     fileStream.Unlock(0, 1);
-                    fileStream.Dispose();
                     LockedFiles.Remove(filePath);
                     return true;
                 }
-                catch (IOException)
+                catch (Exception ex)
                 {
+                    logger.Error(ex, $"解锁文件 {filePath} 出现未知错误");
                     return false;
+                }
+                finally
+                {
+                    fileStream?.Dispose();
                 }
             }
         }
@@ -118,39 +126,46 @@ namespace SC2Shelter
             ReadSaving();
             RunAsyncTask();
             UpdateList();
-			fileSystemWatcher = new FileSystemWatcher
-			{
-				Path = CacheDir,
-				NotifyFilter = NotifyFilters.FileName,
-				IncludeSubdirectories = true
-			};
-			fileSystemWatcher.Created += FileSystemWatcher_Created;
-			fileSystemWatcher.EnableRaisingEvents = true;
-		}
+            fileSystemWatcher = new FileSystemWatcher
+            {
+                Path = CacheDir,
+                NotifyFilter = NotifyFilters.FileName,
+                IncludeSubdirectories = true
+            };
+            fileSystemWatcher.Created += FileSystemWatcher_Created;
+            fileSystemWatcher.EnableRaisingEvents = true;
+        }
 
-		private async void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
-		{
-			Debug.WriteLine($"文件 {e.FullPath} 已经新增");
-			if (FILE_FULL_PATH_REGEX.IsMatch(e.FullPath))
-			{
-				var sr = new StreamReader(e.FullPath);
-				try
+        private async void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
+        {
+            logger.Info($"文件 {e.FullPath} 已经新增");
+            try
+            {
+                if (FILE_FULL_PATH_REGEX.IsMatch(e.FullPath))
                 {
-                    var res = await sr.ReadToEndAsync();
-                    if (FILE_CONTENT_REGEX.IsMatch(res))
+                    bool isMatch;
+                    using (FileStream fs = new FileStream(e.FullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                     {
-                        Debug.WriteLine($"文件 {e.FullPath} 已锁定");
-                        LockFileByMyself(e.FullPath);
+                        using (StreamReader sr = new StreamReader(fs))
+                        {
+                            var res = await sr.ReadToEndAsync();
+                            isMatch = FILE_CONTENT_REGEX.IsMatch(res);
+                        }
+                    }
+                    if (isMatch)
+                    {
+                        File.Delete(e.FullPath);
+                        logger.Info($"文件 {e.FullPath} 已删除");
                     }
                 }
-                finally
-                {
-                    sr.Dispose();
-				}
-			}
-		}
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, $"监视文件 {e.FullPath} 出现异常");
+            }
+        }
 
-		private void MinimizeToTray_Click(object sender, EventArgs e)
+        private void MinimizeToTray_Click(object sender, EventArgs e)
         {
             Hide();
             _notifyIcon.Visible = true;
@@ -274,6 +289,7 @@ namespace SC2Shelter
             }
             return false;
         }
+
         private async void RunAsyncTask()
         {
             await Task.Run(() =>
@@ -376,7 +392,7 @@ namespace SC2Shelter
 
         private async void UpdateList()
         {
-			//This function is hidden in the open-source version.
+            //This function is hidden in the open-source version.
         }
 
         private void ReadSaving()
@@ -401,50 +417,5 @@ namespace SC2Shelter
                 // ignored
             }
         }
-
-		// 导入Windows API函数
-		[DllImport("kernel32.dll", SetLastError = true)]
-		static extern bool LockFile(IntPtr hFile, uint dwFileOffsetLow, uint dwFileOffsetHigh, uint nNumberOfBytesToLockLow, uint nNumberOfBytesToLockHigh);
-
-		[DllImport("kernel32.dll", SetLastError = true)]
-		static extern bool UnlockFile(IntPtr hFile, uint dwFileOffsetLow, uint dwFileOffsetHigh, uint nNumberOfBytesToUnlockLow, uint nNumberOfBytesToUnlockHigh);
-
-		// 导入其他Windows API函数
-		[DllImport("kernel32.dll", SetLastError = true)]
-		static extern IntPtr CreateFile(string lpFileName, FileAccess dwDesiredAccess, FileShare dwShareMode, IntPtr lpSecurityAttributes, FileMode dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
-
-		[DllImport("kernel32.dll", SetLastError = true)]
-		static extern bool CloseHandle(IntPtr hObject);
-
-		public void LockFileByMyself(string filePath)
-		{
-			// 打开文件句柄
-			IntPtr fileHandle = IntPtr.Zero;
-			try
-			{
-				fileHandle = CreateFile(filePath, FileAccess.ReadWrite, FileShare.None, IntPtr.Zero, FileMode.Open, 0, IntPtr.Zero);
-				if (fileHandle != IntPtr.Zero)
-				{
-					UnlockFile(fileHandle, 0, 0, 0xFFFFFFFF, 0xFFFFFFFF);
-					// 锁定文件
-					if (LockFile(fileHandle, 0, 0, 0xFFFFFFFF, 0xFFFFFFFF))
-					{
-						Debug.WriteLine($"File {filePath} locked. Press any key to unlock the file.");
-					}
-					else
-					{
-                        Debug.WriteLine($"Failed {filePath} to lock the file.");
-					}
-				}
-				else
-				{
-                    Debug.WriteLine($"Failed {filePath} to open the file.");
-				}
-			}
-			finally
-			{
-				CloseHandle(fileHandle);
-			}
-		}
-	}
+    }
 }
