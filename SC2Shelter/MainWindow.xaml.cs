@@ -172,7 +172,6 @@ namespace SC2Shelter
             _notifyIcon.MouseClick += NotifyIcon_MouseClick;
         }
 
-
         private void MainWindow_Close(object sender, CancelEventArgs e)
         {
             if (System.Windows.MessageBox.Show("是否退出程序？", "提示", MessageBoxButton.YesNo) == MessageBoxResult.No)
@@ -185,6 +184,7 @@ namespace SC2Shelter
                 _notifyIcon.Dispose();
             }
         }
+
         private static void MainWindow_Click(object sender, EventArgs e)
         {
             if (System.Windows.MessageBox.Show("是否退出程序？", "提示", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
@@ -204,6 +204,7 @@ namespace SC2Shelter
             WindowState = WindowState.Normal;
             Activate();
         }
+
         protected override void OnClosed(EventArgs e)
         {
             if (_notifyIcon != null)
@@ -428,16 +429,16 @@ namespace SC2Shelter
 					// 锁定文件
 					if (LockFile(fileHandle, 0, 0, 0xFFFFFFFF, 0xFFFFFFFF))
 					{
-						Console.WriteLine("File locked. Press any key to unlock the file.");
+						Debug.WriteLine($"File {filePath} locked. Press any key to unlock the file.");
 					}
 					else
 					{
-						Console.WriteLine("Failed to lock the file.");
+                        Debug.WriteLine($"Failed {filePath} to lock the file.");
 					}
 				}
 				else
 				{
-					Console.WriteLine("Failed to open the file.");
+                    Debug.WriteLine($"Failed {filePath} to open the file.");
 				}
 			}
 			finally
