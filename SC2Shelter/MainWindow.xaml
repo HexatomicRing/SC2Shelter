@@ -5,36 +5,54 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SC2Shelter"
         mc:Ignorable="d"
-        WindowStartupLocation="CenterScreen"
-        Title="星际争霸2防炸图器 by 遗世紫丁香" Height="450" Width="400">
+        Title="星际争霸2防炸图器 by 遗世紫丁香" Height="450" Width="600">
     
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <StackPanel Grid.Row="0" Orientation="Vertical">
-            <Grid Grid.Row="0">
+        <StackPanel Grid.Row="0" Orientation="Vertical" Margin="5, 5, 5, 5">
+            <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel x:Name="LangPanel" Grid.Column="0" Orientation="Vertical"/>
+                <StackPanel Grid.Column="0" Orientation="Vertical" Margin="5, 5, 5, 5">
+                    <TextBlock  
+                        Text="注意事项：
+                        &#10;  该程序运作方式为提前拦截，如果失效，这说明刚好有人发布了新的攻击地图，而服务器还没更新列表(你卡服务器timing了!)；
+                        &#10;  一旦卡死，请立即关闭游戏(狂戳鼠标戳出未响应窗口，或者按Ctrl+Shift+Esc调出任务管理器)，然后重启游戏即可；
+                        &#10;  如连续两次游戏依旧卡死，请点击下方按钮，手动扫描缓存文件(可能需要1~10分钟)，排查出漏网之鱼。" 
+                        LineHeight="22" TextWrapping="Wrap" VerticalAlignment="Stretch"/>
+                    <Button x:Name="ScanButton" Content="扫描缓存(耗时)"
+                            VerticalContentAlignment="Center" 
+                            Margin="5, 5, 5, 5"/>
+                </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Vertical">
-                    <Label x:Name="StateLabel" Content="存在风险!&#10;未获取到最新的屏蔽列表,&#10;请检查网络设置!" VerticalContentAlignment="Center">
+                    <Label x:Name="StateLabel"
+                           Content="存在风险!&#10;未获取到最新的屏蔽列表,&#10;请检查网络设置!" 
+                           VerticalContentAlignment="Center" 
+                           Margin="5, 5, 5, 5">
                         <Label.Background>
                             <SolidColorBrush Color="LightPink"/>
                         </Label.Background>
                     </Label>
-                    <Label x:Name="UsersLabel" Content="-1人正在同时使用" VerticalContentAlignment="Center">
-                    </Label>
-                    <Button x:Name="MinimizeToTray" Content="最小化到托盘" VerticalContentAlignment="Center">
-                    </Button>
+                    <Label x:Name="UsersLabel" Content="-1人正在同时使用" 
+                           VerticalContentAlignment="Center"
+                           Margin="5, 5, 5, 5"/>
+                    <Button x:Name="MinimizeToTray" 
+                            Content="最小化到托盘" 
+                            VerticalContentAlignment="Center"
+                            Margin="5, 5, 5, 5"/>
                 </StackPanel>
             </Grid>
         </StackPanel>
-        <ScrollViewer x:Name="ConsoleBoxViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <RichTextBox x:Name="ConsoleBox" IsReadOnly="True" VerticalScrollBarVisibility="Auto"/>
+        <ScrollViewer x:Name="ConsoleBoxViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="5, 5, 5, 5">
+            <RichTextBox 
+                x:Name="ConsoleBox" 
+                IsReadOnly="True" 
+                VerticalScrollBarVisibility="Auto" Margin="5, 5, 5, 5"/>
         </ScrollViewer>
     </Grid>
 </Window>
