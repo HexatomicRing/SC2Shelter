@@ -336,19 +336,35 @@ namespace SC2Shelter
         {
             try
             {
-                if (!File.Exists(Save)) return;
-                var buffer = File.ReadAllLines(Save);
-                foreach (var line in buffer)
+                if (File.Exists(Save))
                 {
-                    if(line.Length == 64) _defendList.Add(line);
+                    var buffer = File.ReadAllLines(Save);
+                    foreach (var line in buffer)
+                    {
+                        if(line.Length == 64) _defendList.Add(line);
+                    }
                 }
-
-                UpdateLockedFile();
             }
             catch
             {
                 // ignored
             }
+            try
+            {
+                if (File.Exists(Local))
+                {
+                    var buffer = File.ReadAllLines(Save);
+                    foreach (var line in buffer)
+                    {
+                        if(line.Length == 64) _defendList.Add(line);
+                    }
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+            UpdateLockedFile();
         }
 
         private void SaveList()
