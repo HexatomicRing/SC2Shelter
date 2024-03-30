@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -19,6 +20,7 @@ namespace SC2Shelter
     public partial class MainWindow
     {
         private const string Save = "latest.list";
+        private const string Local = "local.list";
         private static readonly object LockerFile = new object();
         private static readonly object LockerConsole = new object();
         private const string CacheDir = "C:/ProgramData/Blizzard Entertainment/Battle.net/Cache/";
@@ -118,7 +120,7 @@ namespace SC2Shelter
                             if (!file.EndsWith(".s2ml")) continue;
                             var path = file.Replace('\\', '/');
                             if(LockedFiles.ContainsKey(path)) continue;
-                            if (!CheckFile(path)) continue;
+                            if (!CheckFile(File.ReadAllText(path))) continue;
                             LockFile(path);
                             Print($"文件 {path} 已锁定");
                             Report(path);
@@ -133,24 +135,26 @@ namespace SC2Shelter
         {
             var path = e.FullPath.Replace('\\', '/').Replace("//", "/");
             if(LockedFiles.ContainsKey(path)) return;
-            var sr = new StreamReader(path);
             try
             {
+                var sr = new StreamReader(path);
                 var res = await sr.ReadToEndAsync();
-                if (!FileContentRegex.IsMatch(res)) return;
+                if (!CheckFile(res)) return;
                 File.Delete(path);
                 LockFile(path);
                 Print($"文件 {path} 已锁定");
                 Report(path);
-            }
-            finally
-            {
                 sr.Dispose();
             }
+            catch
+            {
+                // ignored
+            }
         }
-        private static bool CheckFile(string path)
+        private static bool CheckFile(string content)
         {
-            return FileContentRegex.IsMatch(File.ReadAllText(path));
+            var rows = content.Split('\n');
+            return rows.Any(row => row.Length > 10000);
         }
         private void MinimizeToTray_Click(object sender, EventArgs e)
         {
@@ -220,7 +224,7 @@ namespace SC2Shelter
             {
                 lock (LockerConsole)
                 {
-                    ConsoleBox.AppendText(text + "\n");
+                    ConsoleBox.AppendText($"{DateTime.Now:[HH:mm:ss]}: {text}{Environment.NewLine}");
                     if (Math.Abs(ConsoleBoxViewer.ScrollableHeight - ConsoleBoxViewer.VerticalOffset) < 0.01)
                         ConsoleBoxViewer.ScrollToBottom();
                 }
